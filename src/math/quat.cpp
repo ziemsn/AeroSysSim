@@ -23,4 +23,20 @@ namespace aerosyssim::math {
 			q[3] / norm_quat
 		};
 	}
+
+	std::array<double, 4> multiply_quaternion_wxyz(
+			const std::array<double, 4>& a,
+			const std::array<double, 4>& b
+		) {
+
+		const double aw = a[0], ax = a[1], ay = a[2], az = a[3];
+		const double bw = b[0], bx = b[1], by = b[2], bz = b[3];
+
+		return {
+			aw*bw - ax*bx - ay*by - az*bz,			// w
+			aw*bx + ax*bw + ay*bz - az*by,			// x
+			aw*by - ax*bz + ay*bw + az*bx,			// y
+			aw*bz + ax*by - ay*bx + az*bw			// z
+		};
+	}
 }
