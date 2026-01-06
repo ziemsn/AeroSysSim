@@ -1,0 +1,27 @@
+# Build artifacts
+/build/
+/bin/
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Tooling
+compile_commands.json
+
+# OS/editor noise
+*.swp
+*.swo
+.DS_Store
+
+# Outputs (once you add them)
+runs/
+logs/
+
