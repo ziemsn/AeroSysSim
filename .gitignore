@@ -25,3 +25,5 @@ compile_commands.json
 runs/
 logs/
 
+# Local developer scripts
+dev_*.sh
