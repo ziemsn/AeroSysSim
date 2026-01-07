@@ -6,6 +6,7 @@ target_sources(aerosyssim
 	PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/aerosyssim.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/math/quat.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/math/linalg.cpp
 )
 
 # Export the public header location to anything that links this library.

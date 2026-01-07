@@ -7,6 +7,10 @@ add_executable (test_quat
 	test_quat.cpp
 )
 
+add_executable (test_math_skew
+	test_math_skew.cpp
+)
+
 # Link the test against the core library so tests can exercise library code
 target_link_libraries(test_smoke
 	PRIVATE 
@@ -18,12 +22,26 @@ target_link_libraries(test_quat
 	aerosyssim
 )
 
+target_link_libraries(test_math_skew
+	PRIVATE
+	aerosyssim
+)
+
 # Register the executable as a CTest test
 add_test(NAME smoke COMMAND test_smoke)
-
 add_test(NAME quat COMMAND test_quat)
+add_test(NAME math_skew COMMAND test_math_skew)
 
 # put test binaries alongside other executables
 set_target_properties(test_smoke PROPERTIES
 	RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
 )
+
+set_target_properties(test_quat PROPERTIES
+	RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
+)
+
+set_target_properties(test_math_skew PROPERTIES
+	RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
+)
+
