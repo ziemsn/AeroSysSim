@@ -6,25 +6,26 @@
 
 namespace {
 
-	bool approx(double a, double b, double tol) { 
-		return std::fabs(a - b) <= tol;
-	}
-
-	double norm_wxyz(const std::array<double, 4>& q) {
-		return std::sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
-	}
-
-	bool approx_quat_wxyz(const std::array<double, 4>& a,
-						  const std::array<double, 4>& b,
-						  double tol) {
-		for (std::size_t i = 0; i < 4; i++) {
-			if (!approx(a[i], b[i], tol)) {
-				return false;
-			}
-		}
-		return true;
-	}
+bool approx(double a, double b, double tol) { 
+	return std::fabs(a - b) <= tol;
 }
+
+double norm_wxyz(const std::array<double, 4>& q) {
+	return std::sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+}
+
+bool approx_quat_wxyz(const std::array<double, 4>& a,
+					  const std::array<double, 4>& b,
+					  double tol) {
+	for (std::size_t i = 0; i < 4; i++) {
+		if (!approx(a[i], b[i], tol)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+} // namespace
 
 int main() { 
 	const double tol = 1e-12;
