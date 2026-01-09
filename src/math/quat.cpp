@@ -1,18 +1,17 @@
-#include <array>
 #include <cmath>
 
 #include "aerosyssim/math/quat.hpp"
 
 namespace aerosyssim::math {
 
-using Quat =std::array<double, 4>;
+double quaternion_norm(const Quat& q) {
+	return std::sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+}
 
 Quat normalize_quaternion_wxyz(const Quat& q) {
 	constexpr double epsilon = 1e-12;
 
-	const double norm_quat  = std::sqrt(
-		q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]
-	);
+	const double norm_quat = quaternion_norm(q);
 
 	if (norm_quat <= epsilon) {
 		return {1.0, 0.0, 0.0, 0.0};

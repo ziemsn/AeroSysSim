@@ -39,7 +39,7 @@ int main() {
 		const double n = norm_wxyz(q_out);
 		if (!approx(n, 1.0, tol)) {
 			std::cerr << "test_quat: FAIL: normalized quaterion norm is " << n
-				<< ", expected 1.o within tol=" << tol << "\n";
+				<< ", expected 1.0 within tol=" << tol << "\n";
 			return 1;
 		}
 	}

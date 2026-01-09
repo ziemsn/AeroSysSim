@@ -1,11 +1,17 @@
 #pragma once
 
+#include <array>
+
 #include "aerosyssim/math/linalg.hpp"
 #include "aerosyssim/math/quat.hpp"
 
 namespace aerosyssim::sim {
 
 // All quantities are in SI units unless otherwise specified
+
+// Attitdue state for integrators
+// x = [q_w, q_x, q_y, q_z, w_x, w_y, w_z]
+using PackedAttitudeState = std::array<double, 7>;
 
 struct AttitudeState {
 	math::Quat q_wxyz;	// unit quaternion, body-to-inertial by convention
