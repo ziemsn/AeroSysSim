@@ -8,6 +8,7 @@ target_sources(aerosyssim
 	${CMAKE_CURRENT_SOURCE_DIR}/math/quat.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/math/linalg.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/dynamics/rigid_body.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/sim/sim_engine.cpp
 )
 
 # Export the public header location to anything that links this library.
