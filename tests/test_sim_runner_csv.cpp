@@ -48,7 +48,7 @@ std::vector<std::string> split_lines(const std::string& s) {
 
 int main() {
 	// Ctest runs from build/ so ../bin/sim_runner should be valid.
-	const char* cmd = "../bin/sim_runner";
+	const char* cmd = "../bin/sim_runner --dt 0.01 --steps 10 --w 0.3 -0.2 0.1 --t0 0.0";
 
 	const std::string a = run_and_capture(cmd);
 	const std::string b = run_and_capture(cmd);
@@ -79,6 +79,12 @@ int main() {
 	}
 	if (commas != 7) {
 		return fail("first data line does not have 8 fields");
+	}
+	
+	// With include_initial=true and steps=10:
+	// total lines = 1 header + 11 data lines = 12
+	if (lines.size() != 12) {
+		return fail("unexpected number of CSV lines for steps=10");
 	}
 
 	return 0;
