@@ -7,6 +7,7 @@ add_executable (test_types test_types.cpp)
 add_executable (test_rigid_body_rhs test_rigid_body_rhs.cpp)
 add_executable (test_attitude_stepper test_attitude_stepper.cpp)
 add_executable (test_sim_engine_attitude test_sim_engine_attitude.cpp)
+add_executable (test_sim_runner_csv test_sim_runner_csv.cpp)
 
 # Link the tests against the core library so tests can exercise library code
 target_link_libraries(test_smoke PRIVATE aerosyssim)
@@ -27,6 +28,7 @@ add_test(NAME types COMMAND test_types)
 add_test(NAME rigid_body_rhs COMMAND test_rigid_body_rhs)
 add_test(NAME attitude_stepper COMMAND test_attitude_stepper)
 add_test(NAME sim_engine_attitude COMMAND test_sim_engine_attitude)
+add_test(NAME sim_runner_csv COMMAND test_sim_runner_csv)
 
 # put test binaries alongside other executables
 set_target_properties(test_smoke PROPERTIES
@@ -61,3 +63,6 @@ set_target_properties(test_sim_engine_attitude PROPERTIES
 	RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
 )
 
+set_target_properties(test_sim_runner_csv PROPERTIES
+	RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
+)
