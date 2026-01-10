@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <sys/wait.h>
 
 namespace {
 
@@ -12,20 +13,31 @@ int fail(const char* msg) {
 	return 1;
 }
 
-std::string run_and_capture(const char* cmd) {
+struct CmdResult {
 	std::string out;
+	int exit_code = -1;
+};
+
+CmdResult run_and_capture(const char* cmd) {
+	CmdResult r;
 	FILE* pipe = popen(cmd, "r");
 	if (!pipe) {
-		return out;
+		return r;
 	}
 
 	char buf[4096];
 	while (std::fgets(buf, sizeof(buf), pipe) != nullptr) {
-		out += buf;
+		r.out += buf;
 	}
-	pclose(pipe);
-	return out;
-}
+
+	const int status = pclose(pipe);
+	if (status != -1 && WIFEXITED(status)) {
+		r.exit_code = WEXITSTATUS(status);
+	} else {
+		r.exit_code = -1;
+	}
+	return r;
+}	
 
 std::vector<std::string> split_lines(const std::string& s) {
 	std::vector<std::string> lines;
@@ -48,10 +60,25 @@ std::vector<std::string> split_lines(const std::string& s) {
 
 int main() {
 	// Ctest runs from build/ so ../bin/sim_runner should be valid.
-	const char* cmd = "../bin/sim_runner --dt 0.01 --steps 10 --w 0.3 -0.2 0.1 --t0 0.0";
+	const auto h = run_and_capture("../bin/sim_runner --help");
+	if (h.exit_code != 0) {
+		return fail("--help should exit with code 0");
+	}
+	if (h.out.find("sim_runner options") == std::string::npos) {
+		return fail("--help output did not contain expected usage text");
+	}
+	
+	const char* cmd = "LC_ALL=C ../bin/sim_runner --dt 0.01 --steps 10 --w 0.3 -0.2 0.1 --t0 0.0";
 
-	const std::string a = run_and_capture(cmd);
-	const std::string b = run_and_capture(cmd);
+	const auto ra = run_and_capture(cmd);
+	const auto rb = run_and_capture(cmd);
+
+	if (ra.exit_code != 0 || rb.exit_code != 0) {
+		return fail("sim_runner output exited nonzero");
+	}
+
+	const std::string& a = ra.out;
+	const std::string& b = rb.out;
 
 	if (a.empty() || b.empty()) {
 		return fail("sim_runner output was empty");
@@ -63,7 +90,7 @@ int main() {
 
 	const auto lines = split_lines(a);
 	if (lines.size() < 2) {
-		return fail("sim_runner output should include header an;d at least one data line");
+		return fail("sim_runner output should include header and at least one data line");
 	}
 
 	if (lines[0] != "t,qw,qx,qy,qz,wx,wy,wz") {

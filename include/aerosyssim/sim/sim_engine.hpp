@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <vector>
 
 #include "aerosyssim/sim/types.hpp"
@@ -20,11 +21,14 @@ struct SimConfigFixedStep {
 };
 
 // Runs a deterministic fixed-step attitude simulation in memory.
-// Uses step_attitudue_rk4 internally (quaternion renormalized each step).
+// Uses step_attitude_rk4 internally (quaternion renormalized each step).
 SimTraceAttitude run_attitude_fixed_step(
 		const SimConfigFixedStep& cfg,
 		const AttitudeState& x0,
 		const AttitudeControl& u,
 		const RigidBodyParams& p);
+
+// Control callback for time-varying torque policies
+using AttitudeControlFn = std::function<AttitudeControl(double t, const AttitudeState& x)>;
 
 } // namespace aerosyssim::sim
