@@ -93,7 +93,8 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 			i += 3;
 		} else if (a == "--scenario") { 
 			if (i + 1 >= args.size()) {
-				std::cerr << "sim_runner: invalid --scnario\n";
+				std::cerr << "sim_runner: invalid --scenario\n";
+				return ParseStatus::Error;
 			}
 			cfg.scenario = args[i + 1];
 			i += 1;
