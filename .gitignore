@@ -21,7 +21,10 @@ compile_commands.json
 *.swo
 .DS_Store
 
-# Outputs (once you add them)
+# Outputs 
+analysis/out
+artifacts/
+trace.csv
 runs/
 logs/
 

@@ -45,7 +45,7 @@ def read_trace_csv(path: str) -> Trace:
     t = np.asarray(t_list, dtype=float)
     q = np.asarray(q_list, dtype=float)
     w = np.asarray(w_list, dtype=float)
-    if t.ndom != 1 or q.shape[1] != 4 or w.shape[1] != 3:
+    if t.ndim != 1 or q.shape[1] != 4 or w.shape[1] != 3:
         raise ValueError("Malformed data arrays")
 
     return Trace(t=t, q=q, w=w)
