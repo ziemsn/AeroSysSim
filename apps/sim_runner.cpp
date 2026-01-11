@@ -2,6 +2,7 @@
 #include <iomanip>
 #include <cstdlib>
 #include <sstream>
+#include <fstream>
 #include <string>
 #include <locale>
 #include <vector>
@@ -26,6 +27,9 @@ struct AppConfig {
 	double torque_step_t = 0.0;
 	aerosyssim::math::Vec3 torque_step_0{0.0, 0.0, 0.0};
 	aerosyssim::math::Vec3 torque_step_1{0.0, 0.0, 0.0};
+
+	std::string output_path;
+	bool output_to_file = false;
 };
 
 void print_help() {
@@ -39,6 +43,7 @@ void print_help() {
 		<< " --torque <tx> <ty> <tz>\n"
 		<< " --torque-step <t_break> <tx0> <ty0> <tz0> <tx1> <ty1> <tz1>\n"
 		<< " --scenario <principal_axis|coupled_rates>\n"
+		<< " --output <path>\n"
 		<< " --help\n";
 }
 
@@ -74,19 +79,19 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 			return ParseStatus::Help;
 		} else if (a == "--dt") {
 			if (i + 1 >= args.size() || !parse_double(args[i + 1], cfg.dt)) {
-				std::cerr << "sim_runner :invalid --dt\n";
+				std::cerr << "sim_runner: invalid --dt\n";
 				return ParseStatus::Error;
 			}
 			i += 1;
 		} else if (a == "--t0") {
 			if (i + 1 >= args.size() || !parse_double(args[i + 1], cfg.t0)) {
-				std::cerr << "sim_runner :invalid --t0\n";
+				std::cerr << "sim_runner: invalid --t0\n";
 				return ParseStatus::Error;
 			}
 			i += 1;
 		} else if (a == "--steps") {
 			if (i + 1 >= args.size() || !parse_size(args[i + 1], cfg.steps)) {
-				std::cerr << "sim_runner :invalid --steps\n";
+				std::cerr << "sim_runner: invalid --steps\n";
 				return ParseStatus::Error;
 			}
 			i += 1;
@@ -96,7 +101,7 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 				!parse_double(args[i + 1], wx) ||
 				!parse_double(args[i + 2], wy) ||
 				!parse_double(args[i + 3], wz)) {
-				std::cerr << "sim_runner :invalid --w\n";
+				std::cerr << "sim_runner: invalid --w\n";
 				return ParseStatus::Error;
 			}
 			cfg.w0 = aerosyssim::math::Vec3{wx, wy, wz};
@@ -126,7 +131,7 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 				!parse_double(args[i + 5], tx1) || 
 				!parse_double(args[i + 6], ty1) || 
 				!parse_double(args[i + 7], tz1)) { 
-				std::cerr << "sim_runner:invalid -- torque-step\n";
+				std::cerr << "sim_runner: invalid -- torque-step\n";
 				return ParseStatus::Error;
 			}
 			cfg.torque_step_t = tb;
@@ -140,6 +145,14 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 				return ParseStatus::Error;
 			}
 			cfg.scenario = args[i + 1];
+			i += 1;
+		} else if (a == "--output") {
+			if (i + 1 >= args.size()) {
+				std::cerr << "sim_runner: invalid --output\n";
+				return ParseStatus::Error;
+			}
+			cfg.output_path = args[i + 1];
+			cfg.output_to_file = true;
 			i += 1;
 		} else {
 			std::cerr << "sim_runner: unknown option: " << a << "\n";
@@ -208,17 +221,35 @@ int main(int argc, char** argv) {
 
 	const auto trace = aerosyssim::sim::run_attitude_fixed_step(cfg, x0, u_of_t_x, p);
 
-	// Stable CSV formatting
-	std::cout.imbue(std::locale::classic());
-	std::cout.setf(std::ios::scientific);
-	std::cout << std::setprecision(17);
+	std::ofstream ofs;
+	std::ostream* osp = &std::cout;
+	
+	if (app_cfg.output_to_file) {
+		if (app_cfg.output_path.empty()) {
+			std::cerr << "sim_runner: invalid --output\n";
+			return 1;
+		}
+		ofs.open(app_cfg.output_path, std::ios::out | std::ios::trunc | std::ios::binary);
+		if (!ofs) {
+			std::cerr << "sim_runner: failed to open output file: " << app_cfg.output_path << "\n";
+			return 1;
+		}
+		osp = &ofs;
+	}
+	std::ostream& os = *osp;
 
-	std::cout << "t,qw,qx,qy,qz,wx,wy,wz\n";
+
+	// Stable CSV formatting (applied to selected output stream)
+	os.imbue(std::locale::classic());
+	os.setf(std::ios::scientific);
+	os << std::setprecision(17);
+
+	os << "t,qw,qx,qy,qz,wx,wy,wz\n";
 	for (std::size_t i = 0; i < trace.x.size(); ++i) {
 		const auto& xi = trace.x[i];
-		std::cout << trace.t[i] << ","
-				  << xi[0] << "," << xi[1] << "," << xi[2] << "," << xi[3] << ","
-				  << xi[4] << "," << xi[5] << "," << xi[6] << "\n";
+		os << trace.t[i] << ","
+		   << xi[0] << "," << xi[1] << "," << xi[2] << "," << xi[3] << ","
+		   << xi[4] << "," << xi[5] << "," << xi[6] << "\n";
 	}
 
 	return 0;
