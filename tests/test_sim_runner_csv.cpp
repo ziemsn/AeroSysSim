@@ -68,50 +68,59 @@ int main() {
 		return fail("--help output did not contain expected usage text");
 	}
 	
-	const char* cmd = "LC_ALL=C ../bin/sim_runner --dt 0.01 --steps 10 --w 0.3 -0.2 0.1 --t0 0.0";
-
-	const auto ra = run_and_capture(cmd);
-	const auto rb = run_and_capture(cmd);
-
-	if (ra.exit_code != 0 || rb.exit_code != 0) {
-		return fail("sim_runner output exited nonzero");
-	}
-
-	const std::string& a = ra.out;
-	const std::string& b = rb.out;
-
-	if (a.empty() || b.empty()) {
-		return fail("sim_runner output was empty");
-	}
-
-	if (a != b) {
-		return fail("sim_runner output not byte identical across identical runs");
-	}
-
-	const auto lines = split_lines(a);
-	if (lines.size() < 2) {
-		return fail("sim_runner output should include header and at least one data line");
-	}
-
-	if (lines[0] != "t,qw,qx,qy,qz,wx,wy,wz") {
-		return fail("CSV header mismatch");
-	}
-
-	// Basic structural check: first data line should have 8 comma-separated fields
-	int commas = 0;
-	for (char c: lines[1]) {
-		if (c == ','){
-			++commas;
+	auto check_csv = [&](const char* cmd) -> int {
+		const auto ra = run_and_capture(cmd);
+		const auto rb = run_and_capture(cmd);
+		if (ra.exit_code != 0 || rb.exit_code != 0) {
+			return fail("sim_runner exited nonzero");
 		}
+
+		const std::string& a = ra.out;
+		const std::string& b = rb.out;
+		if (a.empty() || b.empty()) {
+			return fail("sim_runner output was empty");
+		}
+
+		if (a != b) {
+			return fail("sim_runner output not byte identical across identical runs");
+		}
+
+		const auto lines = split_lines(a);
+		if (lines.size() < 2) {
+			return fail("sim_runner output should include header and at least one data line");
+		}
+
+		if (lines[0] != "t,qw,qx,qy,qz,wx,wy,wz") {
+			return fail("CSV header mismatch");
+		}
+
+		// Basic structural check: first data line should have 8 comma-separated fields
+		int commas = 0;
+		for (char c: lines[1]) {
+			if (c == ','){
+				++commas;
+			}
+		}
+		if (commas != 7) {
+			return fail("first data line does not have 8 fields");
+		}
+		
+		// With include_initial=true and steps=10:
+		// total lines = 1 header + 11 data lines = 12
+		if (lines.size() != 12) {
+			return fail("unexpected number of CSV lines for steps=10");
+		}
+		return 0;
+	};
+
+	// Scenario 1: explicit w (principal axis style)
+	if (check_csv("LC_ALL=C ../bin/sim_runner --dt 0.01 --steps 10 --w 0.3 -0.2 0.1 --t0 0.0") != 0) {
+		return 1;
 	}
-	if (commas != 7) {
-		return fail("first data line does not have 8 fields");
-	}
-	
-	// With include_initial=true and steps=10:
-	// total lines = 1 header + 11 data lines = 12
-	if (lines.size() != 12) {
-		return fail("unexpected number of CSV lines for steps=10");
+
+	// Scenario 2: coupled rates preset (do not pass --w; scenario should supply defaults)
+	if (check_csv("LC_ALL=C ../bin/sim_runner --scenario coupled_rates --dt 0.01 --steps 10 --t0 0.0") != 0) {
+		return 1;
 	}
 
 	return 0;

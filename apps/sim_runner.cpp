@@ -15,6 +15,8 @@ struct AppConfig {
 	double dt = 0.01;
 	std::size_t steps = 50;
 	aerosyssim::math::Vec3 w0{0.3, -0.2, 0.1};
+	std::string scenario = "principal_axis";
+	bool w_user_set = false;
 };
 
 void print_help() {
@@ -25,6 +27,7 @@ void print_help() {
 		<< " --steps <N>\n"
 		<< " --t0 <t0>\n"
 		<< " --w <wx> <wy> <wz>\n"
+		<< " --scenario <principal_axis|coupled_rates>\n"
 		<< " --help\n";
 }
 
@@ -86,7 +89,14 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 				return ParseStatus::Error;
 			}
 			cfg.w0 = aerosyssim::math::Vec3{wx, wy, wz};
+			cfg.w_user_set = true;
 			i += 3;
+		} else if (a == "--scenario") { 
+			if (i + 1 >= args.size()) {
+				std::cerr << "sim_runner: invalid --scnario\n";
+			}
+			cfg.scenario = args[i + 1];
+			i += 1;
 		} else {
 			std::cerr << "sim_runner: unknown option: " << a << "\n";
 			return ParseStatus::Error;
@@ -109,6 +119,22 @@ int main(int argc, char** argv) {
 		return 0;
 	}
 	if (st == ParseStatus::Error) {
+		return 1;
+	}
+
+	// Scanerio defaults (only apply if usesr did not explicitly provide --w)
+	if (app_cfg.scenario == "principal_axis") {
+		// default already matches this scenario
+		if (!app_cfg.w_user_set) {
+			app_cfg.w0 = aerosyssim::math::Vec3{0.3, -0.2, 0.1};
+		}
+	} else if (app_cfg.scenario == "coupled_rates") {
+		if (!app_cfg.w_user_set) {
+			app_cfg.w0 = aerosyssim::math::Vec3{0.6, 0.4, -0.3};
+		}
+	} else {
+		std::cerr << "sim_runner: unknown scenario: " << app_cfg.scenario << "\n";
+		print_help();
 		return 1;
 	}
 
