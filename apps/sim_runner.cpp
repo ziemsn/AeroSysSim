@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "aerosyssim/sim/sim_engine.hpp"
+#include "aerosyssim/sim/control.hpp"
 
 namespace {
 
@@ -17,6 +18,14 @@ struct AppConfig {
 	aerosyssim::math::Vec3 w0{0.3, -0.2, 0.1};
 	std::string scenario = "principal_axis";
 	bool w_user_set = false;
+
+	bool torque_user_set = false;
+	aerosyssim::math::Vec3 torque0{0.0, 0.0, 0.0};
+
+	bool torque_step_user_set = false;
+	double torque_step_t = 0.0;
+	aerosyssim::math::Vec3 torque_step_0{0.0, 0.0, 0.0};
+	aerosyssim::math::Vec3 torque_step_1{0.0, 0.0, 0.0};
 };
 
 void print_help() {
@@ -27,6 +36,8 @@ void print_help() {
 		<< " --steps <N>\n"
 		<< " --t0 <t0>\n"
 		<< " --w <wx> <wy> <wz>\n"
+		<< " --torque <tx> <ty> <tz>\n"
+		<< " --torque-step <t_break> <tx0> <ty0> <tz0> <tx1> <ty1> <tz1>\n"
 		<< " --scenario <principal_axis|coupled_rates>\n"
 		<< " --help\n";
 }
@@ -91,6 +102,38 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 			cfg.w0 = aerosyssim::math::Vec3{wx, wy, wz};
 			cfg.w_user_set = true;
 			i += 3;
+		} else if (a == "--torque") {
+			double tx = 0.0, ty = 0.0, tz = 0.0;
+			if (i + 3 >= args.size() ||
+				!parse_double(args[i + 1], tx) ||
+				!parse_double(args[i + 2], ty) ||
+				!parse_double(args[i + 3], tz)) {
+				std::cerr << "sim_runner: invalid --torque\n";
+				return ParseStatus::Error;
+			}
+			cfg.torque0 = aerosyssim::math::Vec3{tx, ty, tz};
+			cfg.torque_user_set = true;
+			i += 3;
+		} else if (a == "--torque-step") {
+			double tb = 0.0;
+			double tx0 = 0.0, ty0 = 0.0, tz0 = 0.0;
+			double tx1 = 0.0, ty1 = 0.0, tz1 = 0.0;
+			if (i + 7 >= args.size() ||
+				!parse_double(args[i + 1], tb) || 
+				!parse_double(args[i + 2], tx0) || 
+				!parse_double(args[i + 3], ty0) || 
+				!parse_double(args[i + 4], tz0) || 
+				!parse_double(args[i + 5], tx1) || 
+				!parse_double(args[i + 6], ty1) || 
+				!parse_double(args[i + 7], tz1)) { 
+				std::cerr << "sim_runner:invalid -- torque-step\n";
+				return ParseStatus::Error;
+			}
+			cfg.torque_step_t = tb;
+			cfg.torque_step_0 = aerosyssim::math::Vec3{tx0, ty0, tz0};
+			cfg.torque_step_1 = aerosyssim::math::Vec3{tx1, ty1, tz1};
+			cfg.torque_step_user_set = true;
+			i += 7;
 		} else if (a == "--scenario") { 
 			if (i + 1 >= args.size()) {
 				std::cerr << "sim_runner: invalid --scenario\n";
@@ -143,16 +186,27 @@ int main(int argc, char** argv) {
 	x0.q_wxyz = aerosyssim::math::Quat{1.0, 0.0, 0.0, 0.0};
 	x0.w_body = app_cfg.w0;
 
-	const AttitudeControl u{{0.0, 0.0, 0.0}};
-	const RigidBodyParams p{{2.0, 3.0, 4.0}};
 
+	const RigidBodyParams p{{2.0, 3.0, 4.0}};
 	SimConfigFixedStep cfg;
 	cfg.t0 = app_cfg.t0;
 	cfg.dt = app_cfg.dt;
 	cfg.num_steps = app_cfg.steps;
 	cfg.include_initial = true;
 
-	const auto trace = aerosyssim::sim::run_attitude_fixed_step(cfg, x0, u, p);
+	// Control selection: piecewise schedule > constant torque > default 0 torque
+	const aerosyssim::sim::AttitudeControlFn u_of_t_x = [&](double t, const AttitudeState&) {
+		if (app_cfg.torque_step_user_set) {
+			const auto tau = (t < app_cfg.torque_step_t) ? app_cfg.torque_step_0 : app_cfg.torque_step_1;
+			return AttitudeControl{tau};
+		}
+		if (app_cfg.torque_user_set) {
+			return AttitudeControl{app_cfg.torque0};
+		}
+		return AttitudeControl{aerosyssim::math::Vec3{0.0, 0.0, 0.0}};
+	};
+
+	const auto trace = aerosyssim::sim::run_attitude_fixed_step(cfg, x0, u_of_t_x, p);
 
 	// Stable CSV formatting
 	std::cout.imbue(std::locale::classic());

@@ -122,6 +122,10 @@ int main() {
 	if (check_csv("LC_ALL=C ../bin/sim_runner --scenario coupled_rates --dt 0.01 --steps 10 --t0 0.0") != 0) {
 		return 1;
 	}
+	// Scenario 3: User specified --torque-step
+	if (check_csv("LC_ALL=C ../bin/sim_runner --dt 0.01 --steps 10 --torque-step 0.05 1 0 0 0 2 0") != 0) {
+		return 1;
+	}
 
 	return 0;
 }
