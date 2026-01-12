@@ -43,6 +43,7 @@ void print_help() {
 		<< " --torque <tx> <ty> <tz>\n"
 		<< " --torque-step <t_break> <tx0> <ty0> <tz0> <tx1> <ty1> <tz1>\n"
 		<< " --scenario <principal_axis|coupled_rates>\n"
+		<< " --config <path>\n"
 		<< " --output <path>\n"
 		<< " --help\n";
 }
@@ -63,7 +64,169 @@ bool parse_size(const std::string& s, std::size_t& out) {
 	return true;
 }
 
+static std::string trim_copy(const std::string& s) {
+	std::size_t a = 0;
+	while (a < s.size() && (s[a] == ' ' || s[a] == '\t' || s[a] == '\r' || s[a] == '\n')) {
+		++a;
+	}
+	std::size_t b = s.size();
+	while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' || s[b - 1] == '\r' || s[b - 1] == '\n')) {
+		--b;
+	}
+	return s.substr(a, b - a);
+
+}
+
+static bool parse_vec3(const std::string& value, aerosyssim::math::Vec3& out) {
+	std::string v = value;
+	for (char& c : v) {
+		if (c == ',') {
+			c = ' ';
+		}
+	}
+	std::istringstream iss(v);
+	double x = 0.0, y = 0.0, z = 0.0;
+	if (!(iss >> x >> y >> z)) {
+		return false;
+	}
+	std::string extra;
+	if (iss >> extra) {
+		return false;
+	}
+	out = aerosyssim::math::Vec3{x, y, z};
+	return true;
+}
+
+static bool parse_torque_step7(const std::string& value,
+		double& t_break,
+		aerosyssim::math::Vec3& tau0,
+		aerosyssim::math::Vec3& tau1) {
+	std::string v = value;
+	for (char& c : v) {
+		if (c == ',') {
+			c = ' ';
+		}
+	}
+	std::istringstream iss(v);
+	double tb = 0.0;
+	double a0 = 0.0, a1 = 0.0, a2 = 0.0;
+	double b0 = 0.0, b1 = 0.0, b2 = 0.0;
+	if (!(iss >> tb >> a0 >> a1 >> a2 >> b0 >> b1 >> b2)) {
+		return false;
+	}
+	std::string extra;
+	if (iss >> extra) {
+		return false;
+	}
+	t_break = tb;
+	tau0 = aerosyssim::math::Vec3{a0, a1, a2};
+	tau1 = aerosyssim::math::Vec3{b0, b1, b2};
+	return true;
+}
+
+
 enum class ParseStatus {Ok, Help, Error};
+
+static ParseStatus parse_config_file(const std::string& path, AppConfig& cfg) {
+	std::ifstream ifs(path);
+	if (!ifs) {
+		std::cerr << "sim_runner: failed to open config file: " << path << "\n";
+		return ParseStatus::Error;
+	}
+
+	std::string line;
+	std::size_t lineno = 0;
+	while (std::getline(ifs, line)) {
+		++lineno;
+
+		// Strip comments starting with '#'
+		const std::size_t hash_pos = line.find('#');
+		if (hash_pos != std::string::npos) {
+			line = line.substr(0, hash_pos);
+		}
+
+		line = trim_copy(line);
+		if (line.empty()) {
+			continue;
+		}
+
+		const std::size_t eq = line.find('=');
+		if (eq == std::string::npos) {
+			std::cerr << "sim_runner: config parse error at " << path << ":" << lineno
+					  << " (missing '=')\n";
+			return ParseStatus::Error;
+		}
+
+		const std::string key = trim_copy(line.substr(0, eq));
+		const std::string val = trim_copy(line.substr(eq + 1));
+
+		if (key == "dt") {
+			double tmp = 0.0;
+			if (!parse_double(val, tmp)) {
+				std::cerr << "sim_runner: config invalid dt at " << path << ":" << lineno << "\n";
+				return ParseStatus::Error;
+			}
+			cfg.dt = tmp;
+		} else if (key == "t0") {
+			double tmp = 0.0;
+			if (!parse_double(val, tmp)) {
+				std::cerr << "sim_runner: config invalid t0 at " << path << ":" << lineno << "\n";
+				return ParseStatus::Error;
+			}
+			cfg.t0 = tmp;
+		} else if (key == "steps") {
+			std::size_t tmp = 0;
+			if (!parse_size(val, tmp)) {
+				std::cerr << "sim_runner: config invalid steps at " << path << ":" << lineno << "\n";
+				return ParseStatus::Error;
+			}
+			cfg.steps = tmp;
+		} else if (key == "scenario") {
+			cfg.scenario = val;
+		} else if (key == "w") {
+			aerosyssim::math::Vec3 wtmp;
+			if (!parse_vec3(val, wtmp)) {
+				std::cerr << "sim_runner: config invalid w at " << path << ":" << lineno << "\n";
+				return ParseStatus::Error;
+			}
+			cfg.w0 = wtmp;
+			cfg.w_user_set = true;
+		} else if (key == "torque") {
+			aerosyssim::math::Vec3 ttmp;
+			if (!parse_vec3(val, ttmp)) {
+				std::cerr << "sim_runner: config invalid torque at " << path << ":" << lineno << "\n";
+				return ParseStatus::Error;
+			}
+			cfg.torque0 = ttmp;
+			cfg.torque_user_set = true;
+		} else if (key == "torque-step") {
+			double tb = 0.0;
+			aerosyssim::math::Vec3 tau0, tau1;
+			if (!parse_torque_step7(val, tb, tau0, tau1)) {
+				std::cerr << "sim_runner: config invalid torque_step at " << path << ":" << lineno << "\n";
+				return ParseStatus::Error;
+			}
+			cfg.torque_step_t = tb;
+			cfg.torque_step_0 = tau0;
+			cfg.torque_step_1 = tau1;
+			cfg.torque_step_user_set = true;
+		} else if (key == "output") {
+			if (val.empty() || val == "stdout") {
+				cfg.output_to_file = false;
+				cfg.output_path.clear();
+			} else {
+				cfg.output_to_file = true;
+				cfg.output_path = val;
+			}
+		} else {
+			std::cerr << "sim_runner: unknown config key '" << key << "' at "
+					  << path << ":" << lineno << "\n";
+			return ParseStatus::Error;
+		}
+	}
+
+	return ParseStatus::Ok;
+}
 
 ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 	std::vector<std::string> args;
@@ -146,6 +309,14 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 			}
 			cfg.scenario = args[i + 1];
 			i += 1;
+		} else if (a == "--config") {
+			if (i + 1 >= args.size()) {
+				std::cerr << "sim_runner: invalid --config\n";
+				return ParseStatus::Error;
+			}
+			// Config is handled in main via a pre-scan so that CLI always overrides config,
+			// independent of argument ordering
+			i += 1;
 		} else if (a == "--output") {
 			if (i + 1 >= args.size()) {
 				std::cerr << "sim_runner: invalid --output\n";
@@ -171,6 +342,28 @@ int main(int argc, char** argv) {
 	using aerosyssim::sim::SimConfigFixedStep;
 
 	AppConfig app_cfg;
+
+	// Pre-scan for --config so config is applied before CLI parsing
+	// This guarantees CLI options override config regardless of ordering
+	std::string config_path;
+	for (int i = 1; i < argc; ++i) {
+		if (std::string(argv[i]) == "--config") {
+			if (i + 1 >= argc) {
+				std::cerr << "sim_runner: invalid --config\n";
+				return 1;
+			}
+			config_path = argv[i + 1];
+			++i;
+		}
+	}
+
+	if (!config_path.empty()) {
+		const auto st_cfg = parse_config_file(config_path, app_cfg);
+		if (st_cfg != ParseStatus::Ok) {
+			return 1;
+		}
+	}
+
 	const auto st = parse_args(argc, argv, app_cfg);
 	if (st == ParseStatus::Help) {
 		return 0;
