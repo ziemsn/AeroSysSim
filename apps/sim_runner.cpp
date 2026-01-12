@@ -28,6 +28,10 @@ struct AppConfig {
 	aerosyssim::math::Vec3 torque_step_0{0.0, 0.0, 0.0};
 	aerosyssim::math::Vec3 torque_step_1{0.0, 0.0, 0.0};
 
+	aerosyssim::math::Vec3 inertia_diag{2.0, 3.0, 4.0};
+	bool inertia_full_user_set = false;
+	aerosyssim::math::Mat3 inertia_full{1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0};
+
 	std::string output_path;
 	bool output_to_file = false;
 };
@@ -115,15 +119,27 @@ static bool parse_torque_step7(const std::string& value,
 		return false;
 	}
 	std::string extra;
-	if (iss >> extra) {
-		return false;
-	}
+	if (iss >> extra) return false;
+	
 	t_break = tb;
 	tau0 = aerosyssim::math::Vec3{a0, a1, a2};
 	tau1 = aerosyssim::math::Vec3{b0, b1, b2};
 	return true;
 }
 
+static bool parse_mat3_9(const std::string& value, aerosyssim::math::Mat3& out) {
+	std::string v = value;
+	for (char& c : v) if (c == ',') c = ' ';
+	std::istringstream iss(v);
+	aerosyssim::math::Mat3 A{};
+	for (int i = 0; i < 9; ++i) {
+		if (!(iss >> A[static_cast<std::size_t>(i)])) return false;
+		}
+	std::string extra;
+	if (iss >> extra) return false;
+	out = A;
+	return true;
+}
 
 enum class ParseStatus {Ok, Help, Error};
 
@@ -218,6 +234,26 @@ static ParseStatus parse_config_file(const std::string& path, AppConfig& cfg) {
 				cfg.output_to_file = true;
 				cfg.output_path = val;
 			}
+		} else if (key == "inertia_drag") {
+			aerosyssim::math::Vec3 d;
+			if (!parse_vec3(val, d)) {
+				std::cerr << "sim_runner: config invalid inertia_diag at "
+						  << path << ":" << lineno
+						  << " (expected inertia_idag=Ixx,Iyy,Izz)\n";
+				return ParseStatus::Error;
+			}
+			cfg.inertia_diag = d;
+		} else if (key == "inertia") {
+			aerosyssim::math::Mat3 A;
+			if (!parse_mat3_9(val, A)) {
+				std::cerr << "sim_runner: config invalid inertia at "
+						  << path << ":" << lineno
+						  << " (expected 9 numers row-major: "
+						  << "inertia=a11,a12,a13,a21,a22,a23,a31,a32,a33)\n";
+				return ParseStatus::Error;
+			}
+			cfg.inertia_full = A;
+			cfg.inertia_full_user_set = true;
 		} else {
 			std::cerr << "sim_runner: unknown config key '" << key << "' at "
 					  << path << ":" << lineno << "\n";
@@ -393,7 +429,10 @@ int main(int argc, char** argv) {
 	x0.w_body = app_cfg.w0;
 
 
-	const RigidBodyParams p{{2.0, 3.0, 4.0}};
+	RigidBodyParams p{app_cfg.inertia_diag};
+	if (app_cfg.inertia_full_user_set) {
+		p.inertia_body = app_cfg.inertia_full;
+	}
 	SimConfigFixedStep cfg;
 	cfg.t0 = app_cfg.t0;
 	cfg.dt = app_cfg.dt;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <optional>
 
 #include "aerosyssim/math/linalg.hpp"
 #include "aerosyssim/math/quat.hpp"
@@ -24,7 +25,8 @@ struct AttitudeControl {
 };
 
 struct RigidBodyParams {
-	math::Vec3 inertia_body_diag; // diagonal inertia in body frame, kg-m^2
+	math::Vec3 inertia_body_diag;			// diagonal inertia in body frame, kg-m^2
+	std::optional<math::Mat3> inertia_body; // row-major 3x3, body frame, if set use full inertia
 };
 
 inline constexpr math::Quat kIdentityQuatWxyz{1.0, 0.0, 0.0, 0.0};

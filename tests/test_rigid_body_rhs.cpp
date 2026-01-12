@@ -1,5 +1,6 @@
 #include "aerosyssim/dynamics/rigid_body.hpp"
 
+#include <array>
 #include <cmath>
 #include <iostream>
 
@@ -46,7 +47,7 @@ int main() {
 		}
 	}
 
-	// CAse 2: general w and nonzero torque with diagonal inertia
+	// Case 2: general w and nonzero torque with diagonal inertia
 	{
 		const PackedAttitudeState x{1.0, 0.0, 0.0, 0.0, 1.0, 2.0, 3.0};
 		const AttitudeControl u{{10.0, 20.0,  30.0}};
@@ -64,6 +65,47 @@ int main() {
 
 		if (!near(dx[6], 7.0, tol)) {
 			return fail("wdot_z mismatch");
+		}
+	}
+
+	// Case 3: gernal w and nonzero torque with full (non-diagonal) inertia.
+	// Uses a matrix with a known closed-form inverse to avoid relying on the same solver.
+	//
+	// I = [ 2 1 0
+	//       1 2 0 
+	//       0 0 3 ]
+	//
+	// I^{-1} = [ 2/3 -1/3 0
+	//           -1/3 2/3  0
+	//             0    0 1/3 ]
+	{
+		const PackedAttitudeState x{1.0, 0.0, 0.0, 0.0, 0.4, -0.5, 0.6};
+		const AttitudeControl u{{0.7, -0.2, 0.1}};
+
+		RigidBodyParams p{{2.0, 2.0, 3.0}}; // diag is present but should be ignored when inertia_body is set
+		p.inertia_body = aerosyssim::math::Mat3{
+			2.0, 1.0, 0.0,
+			1.0, 2.0, 0.0,
+			0.0, 0.0, 3.0
+		};
+
+		const auto dx = aerosyssim::dynamics::rigid_body_attitude_rhs_packed(0.0, x, u, p);
+
+		// Expected wdot computed analytically:
+		// rhs = tau - w x (I w), then wdot = I^{-1} rhs.
+		//
+		// For this case:
+		// wdot_x = 107/150
+		// wdot_y = -14/75
+		// wdot_z = 19/300
+		if (!near(dx[4], 107.0 / 150.0, tol)) {
+			return fail("full-inertia wdot_x mismatch");
+		}
+		if (!near(dx[5], -14.0 / 75.0, tol)) {
+			return fail("full-inertia wdot_y mismatch");
+		}
+		if (!near(dx[6], 19.0 / 300.0, tol)) {
+			return fail("full-inertia wdot_z mismatch");
 		}
 	}
 
