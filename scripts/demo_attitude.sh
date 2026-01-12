@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Demo runner for AeroSysSim attitude simulation 
+# Produces a timestamped artifact bundle under artifacts/
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/build}"
+SIM_BIN="${SIM_BIN:-${BUILD_DIR}/bin/sim_runner}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+ARTIFACTS_ROOT="${ARTIFACTS_ROOT:-${ROOT_DIR}/artifacts}"
+OUT_TAG="${OUT_TAG:-demo_attitude}"
+STAMP="$(date +"%Y%m%d_%H%M%S")"
+RUN_DIR="${RUN_DIR:-${ARTIFACTS_ROOT}/${OUT_TAG}_${STAMP}}"
+
+# Default demo parameters (override via env vars if desired)
+DT="${DT:-0.01}"
+STEPS="${STEPS:-200}"
+T0="${T0:-0.0}"
+SCENARIO="${SCENARIO:-coupled_rates}"
+
+# Torque schedule: one breakpoint and two torques
+T_BREAK="${T_BREAK:-0.5}"
+TAU0_X="${TAU0_X:-1.0}"
+TAU0_Y="${TAU0_Y:-0.0}"
+TAU0_Z="${TAU0_Z:-0.0}"
+TAU1_X="${TAU1_X:-0.0}"
+TAU1_Y="${TAU1_Y:-2.0}"
+TAU1_Z="${TAU1_Z:-0.0}"
+
+TRACE_CSV="${TRACE_CSV:-trace.csv}"
+PLOTS_DIR="${PLOTS_DIR:-plots}"
+
+usage() {
+  cat <<EOF
+Usage: scripts/demo_attitude.sh [--no-build]
+
+Creates a timestamped run directory under:
+  artifacts/demo_attitude_YYYYMMDD_HHMMSS/
+
+Outputs:
+  trace.csv
+  plots/w_components.png
+  plots/q_norm.png
+  meta.txt
+
+Environment overrides (examples):
+  BUILD_DIR=build
+  SIM_BIN=build/bin/sim_runner
+  PYTHON_BIN=python3
+  ARTIFACTS_ROOT=artifacts
+  DT=0.02 STEPS=400 SCENARIO=principal_axis
+  T_BREAK=0.5 TAU0_X=1 TAU0_Y=0 TAU0_Z=0 TAU1_X=0 TAU1_Y=2 TAU1_Z=0
+
+EOF
+}
+
+DO_BUILD=1
+if [[ "${1:-}" == "--no-build" ]]; then
+  DO_BUILD=0
+elif [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  usage
+  exit 0
+elif [[ "${1:-}" != "" ]]; then
+  echo "demo_attitude.sh: unknown argument: ${1}" >&2
+  usage >&2
+  exit 2
+fi
+
+mkdir -p "${RUN_DIR}"
+mkdir -p "${RUN_DIR}/${PLOTS_DIR}"
+
+# Record metadata for reproducibility
+META_FILE="${RUN_DIR}/meta.txt"
+{
+  echo "AeroSysSim demo_attitude run"
+  echo "timestamp: ${STAMP}"
+  echo "root_dir: ${ROOT_DIR}"
+  echo "build_dir: ${BUILD_DIR}"
+  echo "sim_bin: ${SIM_BIN}"
+  echo "python_bin: ${PYTHON_BIN}"
+  echo "dt: ${DT}"
+  echo "steps: ${STEPS}"
+  echo "t0: ${T0}"
+  echo "scenario: ${SCENARIO}"
+  echo "torque_step:"
+  echo "  t_break: ${T_BREAK}"
+  echo "  tau0: [${TAU0_X}, ${TAU0_Y}, ${TAU0_Z}]"
+  echo "  tau1: [${TAU1_X}, ${TAU1_Y}, ${TAU1_Z}]"
+} > "${META_FILE}"
+
+echo "Run directory: ${RUN_DIR}"
+
+if [[ "${DO_BUILD}" == "1" ]]; then
+  echo "Building (Release)..."
+  cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+  cmake --build "${BUILD_DIR}" -j "${NSLOTS:-1}"
+fi
+
+if [[ ! -x "${SIM_BIN}" ]]; then
+  echo "ERROR: sim_runner not found/executable at: ${SIM_BIN}" >&2
+  echo "Set SIM_BIN or BUILD_DIR, or run without --no-build." >&2
+  exit 1
+fi
+
+TRACE_PATH="${RUN_DIR}/${TRACE_CSV}"
+
+echo "Running sim_runner -> ${TRACE_PATH}"
+# Force C locale to reduce environmental formatting variance
+LC_ALL=C "${SIM_BIN}" \
+  --dt "${DT}" \
+  --steps "${STEPS}" \
+  --t0 "${T0}" \
+  --scenario "${SCENARIO}" \
+  --torque-step "${T_BREAK}" "${TAU0_X}" "${TAU0_Y}" "${TAU0_Z}" "${TAU1_X}" "${TAU1_Y}" "${TAU1_Z}" \
+  --output "${TRACE_PATH}"
+
+if [[ ! -s "${TRACE_PATH}" ]]; then
+  echo "ERROR: trace CSV was not created or is empty: ${TRACE_PATH}" >&2
+  exit 1
+fi
+
+echo "Plotting -> ${RUN_DIR}/${PLOTS_DIR}"
+"${PYTHON_BIN}" "${ROOT_DIR}/analysis/plot_trace.py" "${TRACE_PATH}" --outdir "${RUN_DIR}/${PLOTS_DIR}" | tee "${RUN_DIR}/analysis_summary.txt"
+
+echo "Done."
+echo "Artifacts:"
+echo "  ${TRACE_PATH}"
+echo "  ${RUN_DIR}/${PLOTS_DIR}/w_components.png"
+echo "  ${RUN_DIR}/${PLOTS_DIR}/q_norm.png"
+echo "  ${META_FILE}"
+echo "  ${RUN_DIR}/analysis_summary.txt"
