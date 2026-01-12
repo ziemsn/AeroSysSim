@@ -1,5 +1,5 @@
 # AeroSysSim
-============
+------------
 
 AeroSysSim is a simulation tool written in C++17. The repository is structured as a reusable static library with deterministic unit tests and a thin app layer for CLI and I/O.
 
