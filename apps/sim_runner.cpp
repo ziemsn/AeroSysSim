@@ -5,10 +5,17 @@
 #include <fstream>
 #include <string>
 #include <locale>
+#include <algorithm>
+#include <cerrno>
+#include <cmath>
 #include <vector>
+
+#include <dirent.h>
+#include <sys/stat.h>
 
 #include "aerosyssim/sim/sim_engine.hpp"
 #include "aerosyssim/sim/control.hpp"
+#include "aerosyssim/sim/metrics.hpp"
 
 namespace {
 
@@ -38,6 +45,10 @@ struct AppConfig {
 
 	std::string output_path;
 	bool output_to_file = false;
+
+	bool batch_mode = false;
+	std::string batch_dir;
+	std::string batch_outdir;
 };
 
 void print_help() {
@@ -53,6 +64,13 @@ void print_help() {
 		<< " --scenario <principal_axis|coupled_rates>\n"
 		<< " --config <path>\n"
 		<< " --output <path>\n"
+		<< " --batch <dir>\n"
+		<< " --batch-outdir <dir>\n"
+		<< "\n"
+		<< "Batch mode: \n"
+		<< " Reads all *.cfg files in <dir> and writes:\n"
+		<< "  <batch-outdir>/summary.csv\n"
+		<< "  <batch-outdir/<case>/trace.csv\n"
 		<< "\n"
 		<< "Config keys (key=value): dt, t0, steps, scenario, w, torque, torque-step, output, inertia_diag, inertia\n"
 		<< " --help\n";
@@ -85,6 +103,62 @@ static std::string trim_copy(const std::string& s) {
 	}
 	return s.substr(a, b - a);
 
+}
+
+static bool is_regular_file(const std::string& path) {
+	struct stat st;
+	if (stat(path.c_str(), &st) != 0) {
+		return false;
+	}
+	return S_ISREG(st.st_mode);
+}
+
+static bool ends_with(const std::string&s, const std::string& suffix) {
+	if (s.size() < suffix.size()) return false;
+	return s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+static std::string basename_no_ext(const std::string& path) {
+	std::string name = path;
+	const std::size_t slash = name.find_last_of("/\\");
+	if (slash != std::string::npos) {
+		name = name.substr(slash + 1);
+	}
+	if (ends_with(name, ".cfg")) {
+		name = name.substr(0, name.size() - 4);
+	}
+	return name;
+}
+
+static std::vector<std::string> list_cfg_files(const std::string& dir) {
+	std::vector<std::string> out;
+	DIR* d = opendir(dir.c_str());
+	if (!d) {
+		return out;
+	}
+	while (true) {
+		errno = 0;
+		dirent* ent = readdir(d);
+		if (!ent) break;
+		const std::string n = ent->d_name;
+		if (n == "." || n == "..") continue;
+		if (!ends_with(n, ".cfg")) continue;
+		const std::string full = dir + "/" + n;
+		if (is_regular_file(full)) {
+			out.push_back(full);
+		}
+	}
+	closedir(d);
+	std::sort(out.begin(), out.end());
+	return out;
+}
+
+static bool mkdir_p_one(const std::string& dir) {
+	// Only one level (no recursion).
+	if (dir.empty()) return false;
+	if (::mkdir(dir.c_str(), 0777) == 0) return true;
+	if (errno == EEXIST) return true;
+	return false;
 }
 
 static bool parse_vec3(const std::string& value, aerosyssim::math::Vec3& out) {
@@ -277,30 +351,37 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 		args.emplace_back(argv[i]);
 	}
 
+	bool saw_any_single_run_opt = false;
+	bool saw_any_batch_opt = false;
+
 	for (std::size_t i = 0; i < args.size(); ++i) {
 		const std::string& a = args[i];
 		if (a == "--help") {
 			print_help();
 			return ParseStatus::Help;
 		} else if (a == "--dt") {
+			saw_any_single_run_opt = true;
 			if (i + 1 >= args.size() || !parse_double(args[i + 1], cfg.dt)) {
 				std::cerr << "sim_runner: invalid --dt\n";
 				return ParseStatus::Error;
 			}
 			i += 1;
 		} else if (a == "--t0") {
+			saw_any_single_run_opt = true;
 			if (i + 1 >= args.size() || !parse_double(args[i + 1], cfg.t0)) {
 				std::cerr << "sim_runner: invalid --t0\n";
 				return ParseStatus::Error;
 			}
 			i += 1;
 		} else if (a == "--steps") {
+			saw_any_single_run_opt = true;
 			if (i + 1 >= args.size() || !parse_size(args[i + 1], cfg.steps)) {
 				std::cerr << "sim_runner: invalid --steps\n";
 				return ParseStatus::Error;
 			}
 			i += 1;
 		} else if (a == "--w") {
+			saw_any_single_run_opt = true;
 			double wx = 0.0, wy = 0.0, wz = 0.0;
 			if (i + 3 >= args.size() || 
 				!parse_double(args[i + 1], wx) ||
@@ -313,6 +394,7 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 			cfg.w_user_set = true;
 			i += 3;
 		} else if (a == "--torque") {
+			saw_any_single_run_opt = true;
 			double tx = 0.0, ty = 0.0, tz = 0.0;
 			if (i + 3 >= args.size() ||
 				!parse_double(args[i + 1], tx) ||
@@ -325,6 +407,7 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 			cfg.torque_user_set = true;
 			i += 3;
 		} else if (a == "--torque-step") {
+			saw_any_single_run_opt = true;
 			double tb = 0.0;
 			double tx0 = 0.0, ty0 = 0.0, tz0 = 0.0;
 			double tx1 = 0.0, ty1 = 0.0, tz1 = 0.0;
@@ -345,6 +428,7 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 			cfg.torque_step_user_set = true;
 			i += 7;
 		} else if (a == "--scenario") { 
+			saw_any_single_run_opt = true;
 			if (i + 1 >= args.size()) {
 				std::cerr << "sim_runner: invalid --scenario\n";
 				return ParseStatus::Error;
@@ -352,6 +436,7 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 			cfg.scenario = args[i + 1];
 			i += 1;
 		} else if (a == "--config") {
+			saw_any_single_run_opt = true;
 			if (i + 1 >= args.size()) {
 				std::cerr << "sim_runner: invalid --config\n";
 				return ParseStatus::Error;
@@ -360,6 +445,7 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 			// independent of argument ordering
 			i += 1;
 		} else if (a == "--output") {
+			saw_any_single_run_opt = true;
 			if (i + 1 >= args.size()) {
 				std::cerr << "sim_runner: invalid --output\n";
 				return ParseStatus::Error;
@@ -367,15 +453,179 @@ ParseStatus parse_args(int argc, char** argv, AppConfig& cfg) {
 			cfg.output_path = args[i + 1];
 			cfg.output_to_file = true;
 			i += 1;
+		} else if (a == "--batch") {
+			saw_any_batch_opt = true;
+			if (i + 1 >= args.size()) {
+				std::cerr << "sim_runner: invalid --batch\n";
+				return ParseStatus::Error;
+			}
+			cfg.batch_mode = true;
+			cfg.batch_dir = args[i + 1];
+			i += 1;
+		} else if (a == "--batch-outdir") {
+			saw_any_batch_opt = true;
+			if (i + 1 >= args.size()) {
+				std::cerr << "sim_runner: invalid --batch-outdir\n";
+				return ParseStatus::Error;
+			}
+			cfg.batch_outdir = args[i + 1];
+			i += 1;
 		} else {
 			std::cerr << "sim_runner: unknown option: " << a << "\n";
 			return ParseStatus::Error;
 		}
 	}
+
+	if (saw_any_batch_opt && saw_any_single_run_opt) {
+		std::cerr << "sim_runner: batch mode cannot be combined with single-run options\n";
+		return ParseStatus::Error;
+	}
+
 	return ParseStatus::Ok;
 }
 
 } // namespace
+
+static int run_batch(const AppConfig& batch_cfg) {
+	if (batch_cfg.batch_dir.empty()) {
+		std::cerr << "sim_runner: --batch requires a directory\n";
+		return 1;
+	}
+	const std::string outdir = batch_cfg.batch_outdir.empty() ? std::string("artifacts/batch") : batch_cfg.batch_outdir;
+	(void)mkdir_p_one("artifacts"); // ok if it fails. outdir may be elsewhere
+	if (!mkdir_p_one(outdir)) {
+		std::cerr << "sim_runner: failed to create batch outdir: " << outdir<< "\n";
+		return 1;
+	}
+
+	const auto cfg_files = list_cfg_files(batch_cfg.batch_dir);
+	if (cfg_files.empty()) {
+		std::cerr << "sim_runner: no .cfg files found in : " << batch_cfg.batch_dir << "\n";
+		return 1;
+	}
+
+	const std::string summary_path = outdir + "/summary.csv";
+	std::ofstream summary(summary_path, std::ios::out | std::ios::trunc | std::ios::binary);
+	if (!summary) {
+		std::cerr << "sim_runner: failed to open summary file: " << summary_path << "\n";
+		return 1;
+	}
+
+	summary.imbue(std::locale::classic());
+	summary.setf(std::ios::scientific);
+	summary << std::setprecision(17);
+	summary
+		<< "case,config_path,trace_path,samples,t_final,has_inertia_full,"
+		<< "qnorm_max_abs_err,energy_rel_dirft,Lnorm_rel_drift,"
+		<<"wx_final,wy_final,wz_final,w_norm_min,w_norm_max\n";
+
+	for (const auto& cfg_path : cfg_files) {
+		AppConfig cfg;
+		const auto st_cfg = parse_config_file (cfg_path, cfg);
+		if (st_cfg != ParseStatus::Ok) return 1;
+
+		const std::string case_name = basename_no_ext(cfg_path);
+		const std::string case_dir = outdir + "/" + case_name;
+		if (!mkdir_p_one(case_dir)) {
+			std::cerr << "sim_runner: failed to create case dir: " << case_dir << "\n";
+			return 1;
+		}
+
+		// Overwrite output for hygiene in batch mode
+		const std::string trace_path = case_dir + "/trace.csv";
+		cfg.output_to_file = true;
+		cfg.output_path = trace_path;
+
+		// Scenario defualts (only if config did not explicitly provide w)
+		if (cfg.scenario == "principal_axis") {
+			if (!cfg.w_user_set) cfg.w0 = aerosyssim::math::Vec3{0.3, -0.2, 0.1};
+		} else if (cfg.scenario == "coupled_rates") {
+			if (!cfg.w_user_set) cfg.w0 = aerosyssim::math::Vec3{0.6, 0.4, -0.3};
+		} else {
+			std::cerr << "sim_runner: unknown scenario: " << cfg.scenario << " in " << cfg_path << "\n";
+			return 1;
+		}
+
+		using aerosyssim::sim::AttitudeState;
+		using aerosyssim::sim::AttitudeControl;
+		using aerosyssim::sim::RigidBodyParams;
+		using aerosyssim::sim::SimConfigFixedStep;
+
+		AttitudeState x0;
+		x0.q_wxyz = aerosyssim::math::Quat{1.0, 0.0, 0.0, 0.0};
+		x0.w_body = cfg.w0;
+
+		RigidBodyParams p{cfg.inertia_diag};
+		if (cfg.inertia_full_user_set) {
+			p.inertia_body = cfg.inertia_full;
+		}
+
+		SimConfigFixedStep scfg;
+		scfg.t0 = cfg.t0;
+		scfg.dt = cfg.dt;
+		scfg.num_steps = cfg.steps;
+		scfg.include_initial = true;
+
+		const aerosyssim::sim::AttitudeControlFn u_of_t_x = [&](double t, const AttitudeState&) {
+			if (cfg.torque_step_user_set) {
+				const auto tau = (t < cfg.torque_step_t) ? cfg.torque_step_0 : cfg.torque_step_1;
+				return AttitudeControl{tau};
+			}
+			if (cfg.torque_user_set) return AttitudeControl{cfg.torque0};
+			return AttitudeControl{aerosyssim::math::Vec3{0.0, 0.0, 0.0}};
+		};
+
+		const auto tr = aerosyssim::sim::run_attitude_fixed_step(scfg, x0, u_of_t_x, p);
+
+		// Write trace.csv
+		std::ofstream ofs(trace_path, std::ios::out | std::ios::trunc | std::ios::binary);
+		if (!ofs) {
+			std::cerr << "sim_runner: failed to open trace file: " << trace_path << "\n";
+			return 1;
+		}
+		ofs.imbue(std::locale::classic());
+		ofs.setf(std::ios::scientific);
+		ofs << std::setprecision(17);
+		ofs << "t,qw,qx,qy,qz,wx,wy,wz\n";
+		for (std::size_t i = 0; i < tr.x.size(); ++i) {
+			const auto& xi = tr.x[i];
+			ofs << tr.t[i] << ","
+						   << xi[0] << "," << xi[1] << "," << xi[2] << "," << xi[3] << ","
+						   << xi[4] << "," << xi[5] << "," << xi[6] << "\n";
+		}
+
+		// Metrics
+		const auto stats = aerosyssim::sim::compute_trace_invariants(tr, p);
+		double w_norm_min = std::numeric_limits<double>::infinity();
+		double w_norm_max = -std::numeric_limits<double>::infinity();
+		for (const auto& xi : tr.x) {
+			const double wx = xi[4], wy = xi[5], wz = xi[6];
+			const double wn = std::sqrt(wx*wx + wy*wy + wz*wz);
+			w_norm_min = std::min(w_norm_min, wn);
+			w_norm_max = std::max(w_norm_max, wn);
+		}
+		const auto& xf = tr.x.back();
+
+		summary
+			<< case_name << ","
+			<< cfg_path << ","
+			<< trace_path << ","
+			<< tr.x.size() << ","
+			<< tr.t.back() << ","
+			<< (cfg.inertia_full_user_set ? 1 : 0) << ","
+			<< stats.qnorm_max_abs_err << ","
+			<< stats.energy_rel_drift << ","
+			<< stats.Lnorm_rel_drift << ","
+			<< xf[4] << "," << xf[5] << "," << xf[6] << ","
+			<< w_norm_min << "," << w_norm_max 
+			<< "\n";
+	}
+
+	std::cout << "Batch complete.\n";
+	std::cout << " outdir: " << outdir << "\n";
+	std::cout << " summary: " << outdir << "/summary.csv\n";
+	return 0;
+}
 
 int main(int argc, char** argv) {
 	using aerosyssim::sim::AttitudeState;
@@ -413,6 +663,9 @@ int main(int argc, char** argv) {
 	if (st == ParseStatus::Error) {
 		return 1;
 	}
+
+	// TESTING
+	if (app_cfg.batch_mode) return run_batch(app_cfg);
 
 	// Scanerio defaults (only apply if usesr did not explicitly provide --w)
 	if (app_cfg.scenario == "principal_axis") {
