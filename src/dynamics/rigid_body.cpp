@@ -73,21 +73,21 @@ bool solve3x3(const math::Mat3& A, const math::Vec3& b, math::Vec3& x) {
 			return false;
 		}
 		if (piv != col) {
-			for (int c = col; c < 4; ++c) {
+			for (int c = 0; c < 4; ++c) {
 				std::swap(m[col][c], m[piv][c]);
 			}
 		}
 
 		// Normalize pivot row
 		const double inv_p = 1.0 / m[col][col];
-		for (int c = col; c < 4; ++c) {
+		for (int c = 0; c < 4; ++c) {
 			m[col][c] *= inv_p;
 		}
 
 		// Eliminate below
 		for (int r = col + 1; r < 3; ++r) {
 			const double f = m[r][col];
-			for (int c = col; c < 4; ++c) {
+			for (int c = 0; c < 4; ++c) {
 				m[r][c] -= f * m[col][c];
 			}
 		}

@@ -11,6 +11,7 @@ add_executable (test_sim_runner_csv test_sim_runner_csv.cpp)
 add_executable (test_sim_engine_control_schedule test_sim_engine_control_schedule.cpp)
 add_executable (test_sim_runner_output_file test_sim_runner_output_file.cpp)
 add_executable (test_sim_runner_config test_sim_runner_config.cpp)
+add_executable (test_sim_invariants test_sim_invariants.cpp)
 
 # Link the tests against the core library so tests can exercise library code
 target_link_libraries(test_smoke PRIVATE aerosyssim)
@@ -22,6 +23,7 @@ target_link_libraries(test_rigid_body_rhs PRIVATE aerosyssim)
 target_link_libraries(test_attitude_stepper PRIVATE aerosyssim)
 target_link_libraries(test_sim_engine_attitude PRIVATE aerosyssim)
 target_link_libraries(test_sim_engine_control_schedule PRIVATE aerosyssim)
+target_link_libraries(test_sim_invariants PRIVATE aerosyssim)
 
 # Register the executable as a CTest test
 add_test(NAME smoke COMMAND test_smoke)
@@ -36,6 +38,7 @@ add_test(NAME sim_runner_csv COMMAND test_sim_runner_csv)
 add_test(NAME sim_engine_control_schedule COMMAND test_sim_engine_control_schedule)
 add_test(NAME sim_runner_output_file COMMAND test_sim_runner_output_file)
 add_test(NAME sim_runner_config COMMAND test_sim_runner_config)
+add_test(NAME sim_invariants COMMAND test_sim_invariants)
 
 # put test binaries alongside other executables
 set_target_properties(test_smoke PROPERTIES
@@ -83,5 +86,9 @@ set_target_properties(test_sim_runner_output_file PROPERTIES
 )
 
 set_target_properties(test_sim_runner_config PROPERTIES
+	RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
+)
+
+set_target_properties(test_sim_invariants PROPERTIES
 	RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
 )
