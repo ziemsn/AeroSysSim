@@ -29,6 +29,15 @@ TAU1_X="${TAU1_X:-0.0}"
 TAU1_Y="${TAU1_Y:-2.0}"
 TAU1_Z="${TAU1_Z:-0.0}"
 
+# Inertia (optional overrides)
+# INERTIA_DIAG: "Ixx,Iyy,Izz" (commas or spaces ok)
+# INERTIA_FUL: 9 values row-major (commas or spaces ok)
+# Example:
+#	INERTIA_DIAG="2,3,4"
+#	INERTIA_FULL="2,0.2,0, 0.2,3,0.1, 0,0.1,4"
+INERTIA_DIAG="${INERTIA_DIAG:-2,3,4}"
+INERTIA_FULL="${INERTIA_FULL:-}"
+
 TRACE_CSV="${TRACE_CSV:-trace.csv}"
 PLOTS_DIR="${PLOTS_DIR:-plots}"
 
@@ -52,6 +61,9 @@ Environment overrides (examples):
   ARTIFACTS_ROOT=artifacts
   DT=0.02 STEPS=400 SCENARIO=principal_axis
   T_BREAK=0.5 TAU0_X=1 TAU0_Y=0 TAU0_Z=0 TAU1_X=0 TAU1_Y=2 TAU1_Z=0
+  INERTIA_DIAG="2,3,4"
+  INERTIA_FULL="2,0.2,0, 0.2,3,0.1, 0,0.1,4"
+  # If INERTIA_FULL is set, sim_runner will use the full tensor inertia path.
 
 EOF
 }
@@ -88,6 +100,8 @@ META_FILE="${RUN_DIR}/meta.txt"
   echo "  t_break: ${T_BREAK}"
   echo "  tau0: [${TAU0_X}, ${TAU0_Y}, ${TAU0_Z}]"
   echo "  tau1: [${TAU1_X}, ${TAU1_Y}, ${TAU1_Z}]"
+  echo "inertia_diag: ${INERTIA_DIAG}"
+  echo "inertia_full: ${INERTIA_FULL}"
 } > "${META_FILE}"
 
 echo "Run directory: ${RUN_DIR}"
@@ -115,8 +129,17 @@ t0=${T0}
 steps=${STEPS}
 scenario=${SCENARIO}
 torque-step=${T_BREAK},${TAU0_X},${TAU0_Y},${TAU0_Z},${TAU1_X},${TAU1_Y},${TAU1_Z}
+inertia_diag=${INERTIA_DIAG}
 output=${TRACE_PATH}
 EOF
+
+if [[ -n "${INERTIA_FULL}" ]]; then
+	{
+		echo ""
+		echo "# Full inertia (row-major 3x3): a11,a12,a13,a21,a22,a23,a31,a32,a33"
+		echo "inertia=${INERTIA_FULL}"
+	} >> "${CFG_PATH}"
+fi
 
 echo "Running sim_runner via config -> ${TRACE_PATH}"
 # Force C locale to reduce environmental formatting variance
@@ -129,24 +152,6 @@ fi
 
 echo "Plotting -> ${RUN_DIR}/${PLOTS_DIR}"
 "${PYTHON_BIN}" "${ROOT_DIR}/analysis/plot_trace.py" "${TRACE_PATH}" --outdir "${RUN_DIR}/${PLOTS_DIR}" | tee "${RUN_DIR}/analysis_summary.txt"
-
-# echo "Running sim_runner -> ${TRACE_PATH}"
-# # Force C locale to reduce environmental formatting variance
-# LC_ALL=C "${SIM_BIN}" \
-#   --dt "${DT}" \
-#   --steps "${STEPS}" \
-#   --t0 "${T0}" \
-#   --scenario "${SCENARIO}" \
-#   --torque-step "${T_BREAK}" "${TAU0_X}" "${TAU0_Y}" "${TAU0_Z}" "${TAU1_X}" "${TAU1_Y}" "${TAU1_Z}" \
-#   --output "${TRACE_PATH}"
-
-# if [[ ! -s "${TRACE_PATH}" ]]; then
-#   echo "ERROR: trace CSV was not created or is empty: ${TRACE_PATH}" >&2
-#   exit 1
-# fi
-
-# echo "Plotting -> ${RUN_DIR}/${PLOTS_DIR}"
-# "${PYTHON_BIN}" "${ROOT_DIR}/analysis/plot_trace.py" "${TRACE_PATH}" --outdir "${RUN_DIR}/${PLOTS_DIR}" | tee "${RUN_DIR}/analysis_summary.txt"
 
 echo "Done."
 echo "Artifacts:"

@@ -30,7 +30,11 @@ struct AppConfig {
 
 	aerosyssim::math::Vec3 inertia_diag{2.0, 3.0, 4.0};
 	bool inertia_full_user_set = false;
-	aerosyssim::math::Mat3 inertia_full{1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0};
+	aerosyssim::math::Mat3 inertia_full{
+		2.0, 0.0, 0.0,
+		0.0, 3.0, 0.0,
+		0.0, 0.0, 4.0
+	};
 
 	std::string output_path;
 	bool output_to_file = false;
@@ -49,6 +53,8 @@ void print_help() {
 		<< " --scenario <principal_axis|coupled_rates>\n"
 		<< " --config <path>\n"
 		<< " --output <path>\n"
+		<< "\n"
+		<< "Config keys (key=value): dt, t0, steps, scenario, w, torque, torque-step, output, inertia_diag, inertia\n"
 		<< " --help\n";
 }
 
@@ -234,12 +240,12 @@ static ParseStatus parse_config_file(const std::string& path, AppConfig& cfg) {
 				cfg.output_to_file = true;
 				cfg.output_path = val;
 			}
-		} else if (key == "inertia_drag") {
+		} else if (key == "inertia_diag") {
 			aerosyssim::math::Vec3 d;
 			if (!parse_vec3(val, d)) {
 				std::cerr << "sim_runner: config invalid inertia_diag at "
 						  << path << ":" << lineno
-						  << " (expected inertia_idag=Ixx,Iyy,Izz)\n";
+						  << " (expected inertia_diag=Ixx,Iyy,Izz)\n";
 				return ParseStatus::Error;
 			}
 			cfg.inertia_diag = d;
@@ -248,7 +254,7 @@ static ParseStatus parse_config_file(const std::string& path, AppConfig& cfg) {
 			if (!parse_mat3_9(val, A)) {
 				std::cerr << "sim_runner: config invalid inertia at "
 						  << path << ":" << lineno
-						  << " (expected 9 numers row-major: "
+						  << " (expected 9 numbers row-major: "
 						  << "inertia=a11,a12,a13,a21,a22,a23,a31,a32,a33)\n";
 				return ParseStatus::Error;
 			}
