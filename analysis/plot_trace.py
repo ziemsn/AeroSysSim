@@ -8,6 +8,7 @@ from typing import List, Tuple, Optional
 import numpy as np
 import matplotlib.pyplot as plt
 
+from plot_utils import save_simple_xy_plot
 
 EXPECTED_HEADER = ["t", "qw", "qx", "qy", "qz", "wx", "wy", "wz"]
 
@@ -60,6 +61,24 @@ def save_plot(path: str) -> None:
     plt.savefig(path, dpi=160, bbox_inches="tight")
     plt.close()
 
+def save_simple_xy_multi_line(
+        series: List[Tuple[str, np.ndarray, np.ndarray]],
+        xlabel: str,
+        ylabel: str,
+        outpath: str,
+        title: Optional[str] = None,
+    ) -> None:
+
+    plt.figure()
+    for label, x, y in series:
+        plt.plot(x, y, label=label)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    if title:
+        plt.title(title)
+    if any(lbl for (lbl, _, _) in series):
+        plt.legend()
+    save_plot(outpath)
 
 def quat_to_rotmat_body_to_inertial(q_wxyz: np.ndarray) -> np.ndarray:
     # q = [w, x, y, z], body to inertial
@@ -99,14 +118,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Plot AeroSysSim sim_runner CSV trace.")
     ap.add_argument("csv", help="Path to sim_runner CSV file")
     ap.add_argument("--outdir", default="analysis/out", help="Output directory for plots")
+    ap.add_argument("--prefix", default="", help="Optional filename prefix for all outputs (e.g., 'case1_')")
     ap.add_argument("--qnorm_tol", type=float, default=1e-6, help="Max allowed | ||q|| - 1 |")
     ap.add_argument("--no_euler", action="store_true", help="Skip Euler angle plot")
+    ap.add_argument("--no_phase", action="store_true", help="Skip body-rate phase plots")
     ap.add_argument("--inertia", nargs=3, type=float, metavar=("IXX", "IYY", "IZZ"),
                     help="If provided, plot rotational kinetic energy for diagonal inertia")
     args = ap.parse_args()
 
     tr = read_trace_csv(args.csv)
     ensure_outdir(args.outdir)
+    prefix = args.prefix
 
     # Basic diagnostics
     if np.any(np.diff(tr.t) <= 0.0):
@@ -122,35 +144,81 @@ def main() -> int:
     print(f"w_final: wx={tr.w[-1,0]:.17e} wy={tr.w[-1,1]:.17e} wz={tr.w[-1,2]:.17e}")
     print(f"|w|: min={wnorm.min():.17e} max={wnorm.max():.17e}")
 
+    # Plot angular speed magnitude
+    save_simple_xy_plot(
+            tr.t, wnorm,
+            xlabel="t",
+            ylabel="|w| [rad/s]",
+            title="Body-rate magnitude",
+            outpath=os.path.join(args.outdir, f"{prefix}w_mag.png"),
+            kind="line",
+        )
+
     # Plot angular velocity components
-    plt.figure()
-    plt.plot(tr.t, tr.w[:, 0], label="wx")
-    plt.plot(tr.t, tr.w[:, 1], label="wy")
-    plt.plot(tr.t, tr.w[:, 2], label="wz")
-    plt.xlabel("t")
-    plt.ylabel("w_body [rad/s]")
-    plt.legend()
-    save_plot(os.path.join(args.outdir, "w_components.png"))
+    save_simple_xy_multi_line(
+            [
+                ("wx", tr.t, tr.w[:, 0]),
+                ("wy", tr.t, tr.w[:, 1]),
+                ("wz", tr.t, tr.w[:, 2]),
+            ],
+            xlabel="t",
+            ylabel="w_body [rad/s]",
+            title="Body-rate components",
+            outpath=os.path.join(args.outdir, f"{prefix}w_components.png"),
+        )
 
     # Plot quaternion norm
-    plt.figure()
-    plt.plot(tr.t, qnorm)
-    plt.xlabel("t")
-    plt.ylabel("||q||")
-    save_plot(os.path.join(args.outdir, "q_norm.png"))
-
+    save_simple_xy_plot(
+            tr.t, qnorm,
+            xlabel="t",
+            ylabel="||q||",
+            title="Quaternion norm",
+            outpath=os.path.join(args.outdir, f"{prefix}q_norm.png"),
+            kind="line",
+        )
+    
     # Plot quaternion components
-    plt.figure()
-    plt.plot(tr.t, tr.q[:, 0], label="qw")
-    plt.plot(tr.t, tr.q[:, 1], label="qx")
-    plt.plot(tr.t, tr.q[:, 2], label="qy")
-    plt.plot(tr.t, tr.q[:, 3], label="qz")
-    plt.xlabel("t")
-    plt.ylabel("q components (wxyz)")
-    plt.legend()
-    save_plot(os.path.join(args.outdir, "q_components.png"))
+    save_simple_xy_multi_line(
+            [
+                ("qw", tr.t, tr.q[:, 0]),
+                ("qx", tr.t, tr.q[:, 1]),
+                ("qy", tr.t, tr.q[:, 2]),
+                ("qz", tr.t, tr.q[:, 3]),
+            ],
+            xlabel="t",
+            ylabel="q (wxyz)",
+            title="Quaternion components",
+            outpath=os.path.join(args.outdir, f"{prefix}q_components.png"),
+        )
 
-    # Optional Euler angle plot (ZYX)
+    # Body-rate phase plots
+    if not args.no_phase:
+        save_simple_xy_plot(
+                tr.w[:, 0], tr.w[:, 1],
+                xlabel="wx [rad/s]",
+                ylabel="wy [rad/s]",
+                title="Phase: wy vs wx",
+                outpath=os.path.join(args.outdir, f"{prefix}wxy_phase.png"),
+                kind="line",
+            )
+        save_simple_xy_plot(
+                tr.w[:, 0], tr.w[:, 2],
+                xlabel="wx [rad/s]",
+                ylabel="wz [rad/s]",
+                title="Phase: wz vs wx",
+                outpath=os.path.join(args.outdir, f"{prefix}wxz_phase.png"),
+                kind="line",
+            )
+        save_simple_xy_plot(
+                tr.w[:, 1], tr.w[:, 2],
+                xlabel="wy [rad/s]",
+                ylabel="wz [rad/s]",
+                title="Phase: wz vs wy",
+                outpath=os.path.join(args.outdir, f"{prefix}wyz_phase.png"),
+                kind="line",
+            )
+
+    # Euler angle plot (ZYX)
     if not args.no_euler:
         euler = np.zeros((tr.t.size, 3), dtype=float)
         for i in range(tr.t.size):
@@ -162,24 +230,31 @@ def main() -> int:
 
         euler_deg = euler * (180.0 / np.pi)
 
-        plt.figure()
-        plt.plot(tr.t, euler_deg[:, 0], label="yaw (deg)")
-        plt.plot(tr.t, euler_deg[:, 1], label="pitch (deg)")
-        plt.plot(tr.t, euler_deg[:, 2], label="roll (deg)")
-        plt.xlabel("t")
-        plt.ylabel("Euler angles ZYX [deg]")
-        plt.legend()
-        save_plot(os.path.join(args.outdir, "euler_zyx_deg.png"))
+        save_simple_xy_multi_line(
+                [
+                    ("yaw [deg]", tr.t, euler_deg[:, 0]),
+                    ("pitch [deg]", tr.t, euler_deg[:, 1]),
+                    ("roll [deg]", tr.t, euler_deg[:, 2]),
+                ],
+                xlabel="t",
+                ylabel="Euler ZYX [deg]",
+                title="Euler angles (ZYX)",
+                outpath=os.path.join(args.outdir, f"{prefix}euler_zyx_deg.png"),
+            )
 
     # Optional rotational kinetic energy for diagonal inertia
     if args.inertia is not None:
         Ixx, Iyy, Izz = args.inertia
         T = 0.5 * (Ixx * tr.w[:, 0]**2 + Iyy * tr.w[:, 1]**2 + Izz * tr.w[:, 2]**2)
-        plt.figure()
-        plt.plot(tr.t, T)
-        plt.xlabel("t")
-        plt.ylabel("T_rot [J] (diag inertia)")
-        save_plot(os.path.join(args.outdir, "rot_kinetic_energy.png"))
+        
+        save_simple_xy_plot(
+                tr.t, T,
+                xlabel="t",
+                ylabel="T_rot [J]",
+                title="Rotational kinetic energy (diag inertia)",
+                outpath=os.path.join(args.outdir, f"{prefix}rot_kinetic_energy.png"),
+                kind="line",
+            )
 
     if qnorm_err > args.qnorm_tol:
         print(f"ERROR: quaternion norm deviation exceeded tolerance {args.qnorm_tol}")
