@@ -516,7 +516,7 @@ static int run_batch(const AppConfig& batch_cfg) {
 	summary << std::setprecision(17);
 	summary
 		<< "case,config_path,trace_path,samples,t_final,has_inertia_full,"
-		<< "qnorm_max_abs_err,energy_rel_dirft,Lnorm_rel_drift,"
+		<< "qnorm_max_abs_err,energy_rel_change,Lnorm_rel_change,"
 		<<"wx_final,wy_final,wz_final,w_norm_min,w_norm_max\n";
 
 	for (const auto& cfg_path : cfg_files) {
@@ -614,8 +614,8 @@ static int run_batch(const AppConfig& batch_cfg) {
 			<< tr.t.back() << ","
 			<< (cfg.inertia_full_user_set ? 1 : 0) << ","
 			<< stats.qnorm_max_abs_err << ","
-			<< stats.energy_rel_drift << ","
-			<< stats.Lnorm_rel_drift << ","
+			<< stats.energy_rel_change << ","
+			<< stats.Lnorm_rel_change << ","
 			<< xf[4] << "," << xf[5] << "," << xf[6] << ","
 			<< w_norm_min << "," << w_norm_max 
 			<< "\n";

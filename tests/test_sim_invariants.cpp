@@ -57,10 +57,10 @@ int main() {
 		std::cerr << "qnorm_max_abs_err = " << stats.qnorm_max_abs_err << "\n";
 		std::cerr << "energy0           = " << stats.energy0 << "\n";
 		std::cerr << "energy_max_abs_err = " << stats.energy_max_abs_err << "\n";
-		std::cerr << "energy_rel_drift = " << stats.energy_rel_drift << "\n";
+		std::cerr << "energy_rel_change = " << stats.energy_rel_change << "\n";
 		std::cerr << "Lnorm0 = " << stats.Lnorm0 << "\n";
 		std::cerr << "Lnorm_max_abs_err = " << stats.Lnorm_max_abs_err << "\n";
-		std::cerr << "Lnorm_rel_drift = " << stats.Lnorm_rel_drift << "\n";
+		std::cerr << "Lnorm_rel_change = " << stats.Lnorm_rel_change << "\n";
 	};
 
 	// q is renormalized every step: deviation should be at floating epsilon magnitude
@@ -70,13 +70,13 @@ int main() {
 	}
 
 	// For torque-free rigid body, rotational kinetic energy and |L| should be conserved
-	if (!(stats.energy_rel_drift <= 1.0e-10)) {
+	if (!(stats.energy_rel_change <= 1.0e-10)) {
 		dump();
-		return fail("rotational kinetic energy drift too large");
+		return fail("rotational kinetic energy change too large");
 	}
-	if (!(stats.Lnorm_rel_drift <= 1.0e-10)) {
+	if (!(stats.Lnorm_rel_change <= 1.0e-10)) {
 		dump();
-		return fail("angular momentum magnitude drift too large");
+		return fail("angular momentum magnitude change too large");
 	}
 
 	return 0;
