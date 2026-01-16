@@ -23,6 +23,7 @@ compile_commands.json
 
 # Outputs 
 analysis/out
+analysis/__pychache__/
 artifacts/
 trace.csv
 runs/
