@@ -8,6 +8,7 @@ target_sources(aerosyssim
 	${CMAKE_CURRENT_SOURCE_DIR}/math/quat.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/math/linalg.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/dynamics/rigid_body.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/dynamics/platform_1d.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/sim/sim_engine.cpp
 )
 
