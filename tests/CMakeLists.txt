@@ -15,6 +15,7 @@ add_executable (test_sim_invariants test_sim_invariants.cpp)
 add_executable (test_sim_runner_config_inertia test_sim_runner_config_inertia.cpp)
 add_executable (test_sim_runner_batch test_sim_runner_batch.cpp)
 add_executable (test_platform_1d_rhs test_platform_1d_rhs.cpp)
+add_executable (test_platform_1d_ballistic test_platform_1d_ballistic.cpp)
 
 # Link the tests against the core library so tests can exercise library code
 target_link_libraries(test_smoke PRIVATE aerosyssim)
@@ -30,6 +31,7 @@ target_link_libraries(test_sim_invariants PRIVATE aerosyssim)
 target_link_libraries(test_sim_runner_config_inertia PRIVATE aerosyssim)
 target_link_libraries(test_sim_runner_batch PRIVATE aerosyssim)
 target_link_libraries(test_platform_1d_rhs PRIVATE aerosyssim)
+target_link_libraries(test_platform_1d_ballistic PRIVATE aerosyssim)
 
 # Register the executable as a CTest test
 add_test(NAME smoke COMMAND test_smoke)
@@ -48,6 +50,7 @@ add_test(NAME sim_invariants COMMAND test_sim_invariants)
 add_test(NAME sim_runner_config_inertia COMMAND test_sim_runner_config_inertia)
 add_test(NAME sim_runner_batch COMMAND test_sim_runner_batch)
 add_test(NAME platform_1d_rhs COMMAND test_platform_1d_rhs)
+add_test(NAME platform_1d_ballistic COMMAND test_platform_1d_ballistic)
 
 # put test binaries alongside other executables
 set_target_properties(test_smoke PROPERTIES
@@ -113,3 +116,8 @@ set_target_properties(test_sim_runner_batch PROPERTIES
 set_target_properties(test_platform_1d_rhs PROPERTIES
 	RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
 )
+
+set_target_properties(test_platform_1d_ballistic PROPERTIES
+	RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
+)
+
